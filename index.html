@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Big Bang Exam Care — MCQ Evaluator</title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Feather icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+  <!-- SheetJS for Excel import/export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    :root{--brand:#e53935;--accent:#2c3e50}
+    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:#f4f6f9}
+    .app-shell{max-width:1200px;margin:24px auto;padding:20px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{height:46px}
+    .nav-pill .btn{min-width:140px}
+    .question-grid{display:flex;gap:10px;flex-wrap:wrap}
+    .question-card{background:#fff;border-radius:8px;padding:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06)}
+    .option-btn{width:44px;height:36px;margin:4px;border-radius:6px}
+    .option-btn.selected{background:var(--brand);color:#fff}
+    .small-muted{font-size:13px;color:#6c757d}
+    .table-fixed tbody{height:360px;overflow:auto;display:block}
+    .table-fixed thead, .table-fixed tbody tr{display:table;width:100%;table-layout:fixed}
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace; white-space: pre-wrap; }
+
+    @media (max-width:768px){
+      .nav-pill .btn{min-width:unset;font-size:14px}
+      .question-grid{flex-direction:column}
+    }
+    .omr-scroll {
+      max-height: 400px;   /* adjust height as needed */
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 8px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell container-lg">
+    <header class="mb-4 text-center">
+      <div class="brand d-flex flex-column align-items-center">
+        <!-- use relative filename; fallback to placeholder if missing -->
+        <img src="Big Bang logo-icn.png"
+             alt="Big Bang Exam Care logo"
+             onerror="this.onerror=null; this.src='https://dummyimage.com/320x200/2c3e50/ffffff&text=Big+Bang+Logo';"
+             style="max-height: 120px; margin-bottom: 12px;">
+        <div>
+          <h2 class="mb-1 fw-bold" style="color:var(--brand); font-size:2rem;">
+            Big Bang Exam Care
+          </h2>
+          <div class="small-muted fs-5">
+            Admission Olympiad — MCQ Evaluator
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation -->
+    <div class="d-flex gap-2 nav-pill mb-4">
+      <button id="navHome" class="btn btn-light shadow-sm" onclick="navigate('home')" type="button">Home</button>
+      <button id="navList" class="btn btn-light shadow-sm" onclick="navigate('list')" type="button">Exam List</button>
+      <button id="navEval" class="btn btn-light shadow-sm" onclick="navigate('evaluate')" type="button">Evaluate Exam</button>
+      <button id="navResult" class="btn btn-light shadow-sm" onclick="navigate('result')" type="button">Result</button>
+    </div>
+
+    <!-- MAIN CONTAINER (single-page app) -->
+    <div id="main"></div>
+
+    <footer class="mt-4 small-muted">&copy; <span id="year"></span> Big Bang Exam Care</footer>
+  </div>
+
+  <!-- Templates and Modals -->
+  <template id="homeTpl">
+    <div class="card p-4">
+      <div class="row align-items-center">
+        <div class="col-md-8">
+          <h2 style="color:var(--brand)">Welcome to Big Bang Exam Care</h2>
+          <p class="small-muted">Use the buttons above to manage exams, evaluate students using OMR, and view results.</p>
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" onclick="navigate('list')" type="button">Manage Exams</button>
+            <button class="btn btn-outline-primary" onclick="navigate('evaluate')" type="button">Evaluate Now</button>
+          </div>
+        </div>
+        <div class="col-md-4 text-center">
+          <img src="https://dummyimage.com/320x200/2c3e50/ffffff&text=MCQ+Evaluator" class="img-fluid rounded" alt="hero">
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="listTpl">
+    <div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Exam List</h4>
+        <div>
+          <button class="btn btn-success" onclick="openExamModal()" type="button"><i data-feather="plus"></i> Add Exam</button>
+          <button class="btn btn-secondary ms-2" onclick="exportExamsToExcel()" type="button"><i data-feather="download"></i> Export Exams</button>
+          <button class="btn btn-outline-secondary ms-2" onclick="triggerImport()" type="button" title="Import exams from Excel/CSV"><i data-feather="upload"></i> Import Exams</button>
+          <input id="importFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(event)">
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <div class="row g-2">
+          <div class="col-md-3"><input id="filterName" class="form-control" placeholder="Filter by name" oninput="renderExamTable()"></div>
+          <div class="col-md-2"><select id="filterSet" class="form-select" onchange="renderExamTable()"><option value="">All Sets</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+        </div>
+      </div>
+
+      <div id="examTableWrapper"></div>
+    </div>
+  </template>
+
+  <template id="evaluateTpl">
+    <div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Evaluate Exam</h4>
+        <div>
+          <button class="btn btn-outline-secondary" onclick="navigate('list')" type="button">Manage Exams</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4"><label class="form-label">Select Exam</label><select id="evalExamSelect" class="form-select" onchange="loadExamForEvaluation()"></select></div>
+          <div class="col-md-3">
+            <label class="form-label">Branch</label>
+            <select id="evalBranch" class="form-select">
+              <option value="">-- Select Branch --</option>
+              <option>Purana Paltan</option>
+              <option>Siddheswari</option>
+              <option>Bogura</option>
+              <option>Rangpur</option>
+              <option>Chattogram</option>
+              <option>Mymensingh</option>
+              <option>Kushtia</option>
+            </select>
+          </div>
+
+          <div class="col-md-3"><label class="form-label">Student Roll</label><input id="evalRoll" class="form-control" placeholder="e.g. 2025-001"></div>
+          <div class="col-md-2 text-end"><button class="btn btn-primary" id="startOMRBtn" onclick="startOMR()" type="button">Start OMR</button></div>
+        </div>
+      </div>
+
+      <div id="omrContainer"></div>
+    </div>
+  </template>
+
+  <template id="resultTpl">
+    <div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Results</h4>
+        <div>
+          <button class="btn btn-secondary" onclick="exportResultsToExcel()" type="button"><i data-feather="download"></i> Export Results</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <div class="row g-2">
+          <div class="col-md-3"><input id="rFilterRoll" class="form-control" placeholder="Filter by roll" oninput="renderResultsTable()"></div>
+          <div class="col-md-3"><input id="rFilterBranch" class="form-control" placeholder="Filter by branch" oninput="renderResultsTable()"></div>
+          <div class="col-md-3"><select id="rSort" class="form-select" onchange="renderResultsTable()"><option value="date_desc">Sort by: Newest</option><option value="mark_desc">Marks (High→Low)</option><option value="mark_asc">Marks (Low→High)</option><option value="roll_asc">Roll (A→Z)</option></select></div>
+        </div>
+      </div>
+
+      <div id="resultsTableWrapper"></div>
+    </div>
+  </template>
+
+  <!-- Exam Modal -->
+  <div class="modal fade" id="examModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add / Edit Exam</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- prevent accidental submit; buttons inside use type="button" -->
+          <form id="examForm" onsubmit="return false;">
+            <input type="hidden" id="examId">
+            <div class="row g-2">
+              <div class="col-md-6"><label class="form-label">Exam Name</label><input id="examName" class="form-control" required></div>
+              <div class="col-md-3"><label class="form-label">Set</label><select id="examSet" class="form-select"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+              <div class="col-md-3"><label class="form-label">Number of Questions</label><input id="examQ" type="number" min="1" max="2000" class="form-control" value="100"></div>
+            </div>
+
+            <div class="mt-3">
+              <label class="form-label">Answers input</label>
+              <div class="form-check form-check-inline ms-1"><input class="form-check-input" type="radio" name="ansType" id="ansOMR" value="omr" checked><label class="form-check-label" for="ansOMR">Fill OMR</label></div>
+              <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ansType" id="ansCSV" value="csv"><label class="form-check-label" for="ansCSV">Comma separated</label></div>
+
+              <div id="omrEditor" class="mt-2"></div>
+
+              <div id="csvEditor" class="mt-2" style="display:none">
+                <textarea id="csvText" class="form-control" rows="4" placeholder="e.g. A,B,C,D,A,..."></textarea>
+              </div>
+            </div>
+
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveExam()">Save Exam</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result Detail Modal -->
+  <div class="modal fade" id="resultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Result Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="resultDetailBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dependencies (Bootstrap JS) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // --- App state persisted to localStorage ---
+    const STORAGE_KEYS = { EXAMS: 'bb_exams_v1', RESULTS: 'bb_results_v1', LAST_EVAL: 'bb_last_eval_exam' };
+
+    // Initialize sample data if none
+    function initStorage() {
+      if (!localStorage.getItem(STORAGE_KEYS.EXAMS)) {
+        const sampleExam = {
+          id: genId(), name: 'Admission Olympiad', set: 'A', qCount: 10,
+          // sample answers for demo (A,B,C,D repeating)
+          answers: Array.from({length:10}).map((_,i) => ['A','B','C','D'][(i%4)])
+        };
+        localStorage.setItem(STORAGE_KEYS.EXAMS, JSON.stringify([sampleExam]));
+      }
+      if (!localStorage.getItem(STORAGE_KEYS.RESULTS)) {
+        localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify([]));
+      }
+    }
+
+    function genId(){return 'id_'+Math.random().toString(36).slice(2,9)}
+
+    function getExams(){return JSON.parse(localStorage.getItem(STORAGE_KEYS.EXAMS)||'[]')}
+    function saveExams(list){localStorage.setItem(STORAGE_KEYS.EXAMS, JSON.stringify(list))}
+    function getResults(){return JSON.parse(localStorage.getItem(STORAGE_KEYS.RESULTS)||'[]')}
+    function saveResults(list){localStorage.setItem(STORAGE_KEYS.RESULTS, JSON.stringify(list))}
+    function saveLastEval(id){ if(id) localStorage.setItem(STORAGE_KEYS.LAST_EVAL, id); else localStorage.removeItem(STORAGE_KEYS.LAST_EVAL); }
+    function getLastEval(){ return localStorage.getItem(STORAGE_KEYS.LAST_EVAL) || ''; }
+
+    // --- Navigation ---
+    function navigate(page){
+      document.querySelectorAll('.nav-pill .btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById('navHome').classList.toggle('active', page==='home');
+      document.getElementById('navList').classList.toggle('active', page==='list');
+      document.getElementById('navEval').classList.toggle('active', page==='evaluate');
+      document.getElementById('navResult').classList.toggle('active', page==='result');
+
+      const main = document.getElementById('main');
+      if(page==='home') main.innerHTML = document.getElementById('homeTpl').content.cloneNode(true).children[0].outerHTML;
+      if(page==='list') { main.innerHTML = document.getElementById('listTpl').content.cloneNode(true).children[0].outerHTML; renderExamTable(); }
+      if(page==='evaluate') { main.innerHTML = document.getElementById('evaluateTpl').content.cloneNode(true).children[0].outerHTML; populateEvalSelect(); }
+      if(page==='result') { main.innerHTML = document.getElementById('resultTpl').content.cloneNode(true).children[0].outerHTML; renderResultsTable(); }
+
+      // refresh feather icons after DOM changes
+      setTimeout(()=>feather.replace(), 0);
+    }
+
+    // --- Exam List UI ---
+    function renderExamTable(){
+      const wrapper = document.getElementById('examTableWrapper');
+      if(!wrapper) return;
+      const exams = getExams();
+      const fName = (document.getElementById('filterName')?.value||'').toLowerCase();
+      const fSet = document.getElementById('filterSet')?.value || '';
+      const filtered = exams.filter(e=>(!fName||e.name.toLowerCase().includes(fName)) && (!fSet||e.set===fSet));
+
+      let html = `<div class="table-responsive"><table class="table table-hover align-middle">
+        <thead><tr><th>Exam</th><th>Set</th><th>Q Count</th><th>Actions</th></tr></thead><tbody>`;
+      filtered.forEach(ex=>{
+        html+=`<tr><td>${escapeHtml(ex.name)}</td><td>${escapeHtml(ex.set)}</td><td>${ex.qCount}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editExam('${ex.id}')" title="Edit"><i data-feather="edit-2"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-1" onclick="deleteExam('${ex.id}')" title="Delete"><i data-feather="trash-2"></i></button>
+          </td></tr>`;
+      });
+      html+=`</tbody></table></div>`;
+      wrapper.innerHTML = html; setTimeout(()=>feather.replace(), 0);
+    }
+
+    function triggerImport(){ document.getElementById('importFile').click(); }
+    function handleImportFile(ev){
+      const file = ev.target.files && ev.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e){
+        const data = e.target.result;
+        let workbook;
+        try {
+          workbook = XLSX.read(data, {type: (file.name.endsWith('.csv') ? 'string' : 'binary')});
+        } catch(err){
+          // try CSV as fallback
+          workbook = XLSX.read(data, {type:'binary'});
+        }
+        // parse first sheet
+        const firstName = workbook.SheetNames[0];
+        const ws = workbook.Sheets[firstName];
+        const json = XLSX.utils.sheet_to_json(ws, {defval:''});
+        // expected columns: Name, Set, QCount, Answers
+        const exams = getExams();
+        let added = 0;
+        json.forEach(row=>{
+          const name = (row.Name || row.name || '').toString().trim();
+          if(!name) return;
+          const set = (row.Set || row.set || 'A').toString().trim() || 'A';
+          let qCount = parseInt(row.QCount || row.qcount || row.Q || 0, 10) || 0;
+          const answersRaw = (row.Answers || row.answers || '').toString().trim();
+          let answers = [];
+          if(answersRaw){
+            answers = answersRaw.split(',').map(s=>s.trim().toUpperCase()).map(a=> (['A','B','C','D'].includes(a) ? a : null));
+            if(qCount === 0) qCount = answers.length;
+          }
+          if(qCount <= 0) qCount = Math.max(answers.length, 10);
+          // pad/truncate
+          if(answers.length < qCount) answers = answers.concat(Array.from({length:qCount-answers.length}).map(()=>null));
+          if(answers.length > qCount) answers = answers.slice(0,qCount);
+          const payload = {id: genId(), name, set, qCount, answers};
+          exams.push(payload); added++;
+        });
+        saveExams(exams);
+        alert(`Imported ${added} exam(s).`);
+        renderExamTable();
+        ev.target.value = ''; // reset input
+      };
+      // FileReader read type
+      if(file.name.endsWith('.csv')) reader.readAsText(file);
+      else reader.readAsBinaryString(file);
+    }
+
+    function openExamModal(){
+      const m = new bootstrap.Modal(document.getElementById('examModal'));
+      document.getElementById('examForm').reset();
+      document.getElementById('examId').value = '';
+      document.getElementById('examQ').value = 100;
+      document.getElementById('omrEditor').innerHTML = '';
+      document.getElementById('csvText').value = '';
+      // render a fresh OMR with type=button and double-click unselect
+      const scrollDiv = document.createElement('div');
+      scrollDiv.className = 'omr-scroll';
+      scrollDiv.appendChild(renderTinyOMR(10));
+      document.getElementById('omrEditor').appendChild(scrollDiv);
+
+      document.getElementById('csvEditor').style.display='none';
+      m.show();
+      // radio change handlers (safe)
+      document.getElementById('ansOMR').onchange = ()=>{ document.getElementById('omrEditor').style.display='block'; document.getElementById('csvEditor').style.display='none' };
+      document.getElementById('ansCSV').onchange = ()=>{ document.getElementById('omrEditor').style.display='none'; document.getElementById('csvEditor').style.display='block' };
+
+      // when question count changes, re-render OMR inside modal to match
+      document.getElementById('examQ').onchange = ()=> {
+        const q = parseInt(document.getElementById('examQ').value,10) || 0;
+        document.getElementById('omrEditor').innerHTML = '';
+        if(q>0){
+          if(q > 500 && !confirm('Rendering more than 500 questions in the editor may be slow. Continue?')) { document.getElementById('examQ').value = 500; return; }
+          const sd = document.createElement('div'); sd.className='omr-scroll';
+          sd.appendChild(renderTinyOMR(q));
+          document.getElementById('omrEditor').appendChild(sd);
+        }
+      };
+    }
+
+    // Render small OMR editor used in Add/Edit exam modal
+    function renderTinyOMR(n, answers=null){
+      const row = document.createElement('div');
+      row.className = 'row g-2';
+      for(let col=0; col<Math.ceil(n/25); col++){
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-md-3'; // 4 columns on desktop
+        for(let i=col*25+1; i<=Math.min((col+1)*25, n); i++){
+          const card = document.createElement('div');
+          card.className='question-card p-2 mb-2';
+          card.style.minWidth='120px';
+          card.dataset.qindex = i-1;
+          const label = document.createElement('div');
+          label.className='fw-bold';
+          label.textContent = `Q${i}`;
+          card.appendChild(label);
+          ['A','B','C','D'].forEach(opt=>{
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn btn-sm btn-outline-secondary option-btn';
+            b.textContent = opt;
+            // single click selects (exclusive)
+            // b.addEventListener('click', (ev)=>{
+            //   ev.stopPropagation();
+            //   card.querySelectorAll('.option-btn').forEach(x=>x.classList.remove('selected'));
+            //   b.classList.add('selected');
+            // });
+            b.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (b.classList.contains('selected')) {
+              // If already selected, unselect it
+              b.classList.remove('selected');
+              if (currentEvaluation) currentEvaluation.selectedAnswers[i - 1] = null; // Update evaluation state
+            } else {
+              // Otherwise, select it and unselect others
+              card.querySelectorAll('.option-btn').forEach(x => x.classList.remove('selected'));
+              b.classList.add('selected');
+              if (currentEvaluation) currentEvaluation.selectedAnswers[i - 1] = opt; // Update evaluation state
+            }
+          });
+            // double click unselects
+            b.addEventListener('dblclick', (ev)=>{
+              ev.stopPropagation();
+              if(b.classList.contains('selected')){
+                b.classList.remove('selected');
+              }
+            });
+            card.appendChild(b);
+          });
+          // Pre-fill answers if provided
+          if(Array.isArray(answers) && answers[i-1] && ['A','B','C','D'].includes(answers[i-1])) {
+            setTimeout(()=>{
+              const btns = card.querySelectorAll('.option-btn');
+              btns.forEach(bt=>{
+                if(bt.textContent === answers[i-1]) bt.classList.add('selected');
+              });
+            },0);
+          }
+          colDiv.appendChild(card);
+        }
+        row.appendChild(colDiv);
+      }
+      return row;
+    }
+
+    function saveExam(){
+      const id = document.getElementById('examId').value || genId();
+      const name = document.getElementById('examName').value.trim();
+      const set = document.getElementById('examSet').value;
+      let qCount = parseInt(document.getElementById('examQ').value,10);
+      if(!name){ alert('Please enter exam name'); return; }
+      if(!qCount || qCount < 1) { alert('Please provide a valid number of questions'); return; }
+      // limit qCount to reasonable value
+      if(qCount > 2000) { if(!confirm('Number of questions > 2000. Continue?')) return; }
+
+      const ansType = document.querySelector('input[name="ansType"]:checked').value;
+      let answers = [];
+
+      if(ansType === 'csv'){
+        const txt = document.getElementById('csvText').value.trim();
+        if(!txt){ // fill with nulls
+          answers = Array.from({length:qCount}).map(()=>null);
+        } else {
+          answers = txt.split(',').map(s=>s.trim().toUpperCase()).slice(0,qCount);
+        }
+      } else {
+        // collect from OMR editor inside modal
+        const omr = document.getElementById('omrEditor');
+        const cards = omr.querySelectorAll('.question-card');
+        answers = [];
+        for(let i=0;i<qCount;i++){
+          const card = cards[i];
+          if(!card){ answers.push(null); continue; }
+          const sel = card.querySelector('.option-btn.selected');
+          answers.push(sel ? sel.textContent : null);
+        }
+      }
+
+      // normalize: ensure answers are 'A'..'D' or null, and pad/truncate to qCount
+      answers = answers.map(a => (a && ['A','B','C','D'].includes(a) ? a : null));
+      if(answers.length < qCount) answers = answers.concat(Array.from({length:qCount-answers.length}).map(()=>null));
+      if(answers.length > qCount) answers = answers.slice(0,qCount);
+
+      // persist
+      const exams = getExams();
+      const idx = exams.findIndex(e=>e.id===id);
+      const payload = {id, name, set, qCount, answers};
+      if(idx >= 0) exams[idx] = payload; else exams.push(payload);
+      saveExams(exams);
+
+      // hide modal
+      const modalEl = document.getElementById('examModal');
+      const bs = bootstrap.Modal.getInstance(modalEl);
+      if(bs) bs.hide();
+
+      renderExamTable(); populateEvalSelect();
+    }
+
+    function editExam(id){
+      const exams = getExams(); const ex = exams.find(e=>e.id===id); if(!ex) return;
+      const m = new bootstrap.Modal(document.getElementById('examModal'));
+      document.getElementById('examId').value = ex.id;
+      document.getElementById('examName').value = ex.name;
+      document.getElementById('examSet').value = ex.set;
+      document.getElementById('examQ').value = ex.qCount;
+      document.getElementById('omrEditor').innerHTML = '';
+      // render with answers (they will be selected)
+      const scrollDiv = document.createElement('div');
+      scrollDiv.className = 'omr-scroll';
+      scrollDiv.appendChild(renderTinyOMR(ex.qCount, ex.answers || []));
+      document.getElementById('omrEditor').appendChild(scrollDiv);
+
+      document.getElementById('csvEditor').style.display='none';
+      m.show();
+      document.getElementById('ansOMR').onchange = ()=>{document.getElementById('omrEditor').style.display='block'; document.getElementById('csvEditor').style.display='none'};
+      document.getElementById('ansCSV').onchange = ()=>{document.getElementById('omrEditor').style.display='none'; document.getElementById('csvEditor').style.display='block'};
+    }
+
+    function deleteExam(id){
+      if(!confirm('Delete this exam? This action cannot be undone.')) return;
+      const list = getExams().filter(e=>e.id!==id);
+      saveExams(list);
+      renderExamTable();
+      populateEvalSelect();
+    }
+
+    function exportExamsToExcel(){
+      const exams = getExams();
+      const sheetData = exams.map(e=>({Name:e.name,Set:e.set,QCount:e.qCount,Answers:e.answers.map(a=>a||'').join(',')}));
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Exams');
+      const fname = `bb_exams_${(new Date()).toISOString().replace(/[:.]/g,'-')}.xlsx`;
+      XLSX.writeFile(wb, fname);
+    }
+
+    // --- Evaluation ---
+    function populateEvalSelect(){
+      const sel = document.getElementById('evalExamSelect'); if(!sel) return;
+      const exams = getExams();
+      const html = '<option value="">-- Select exam --</option>' + exams.map(e=>`<option value="${e.id}">${escapeHtml(e.name)} (Set ${escapeHtml(e.set)})</option>`).join('');
+      sel.innerHTML = html;
+      const last = getLastEval();
+      if(last && exams.some(x=>x.id===last)) sel.value = last;
+      setTimeout(()=>feather.replace(),0);
+    }
+
+    let currentEvaluation = null; // {exam, selectedAnswers[]}
+
+    function loadExamForEvaluation(){
+      const id = document.getElementById('evalExamSelect').value; if(!id) return;
+      const exams = getExams(); const ex = exams.find(x=>x.id===id); if(!ex) return;
+      // store last exam
+      saveLastEval(id);
+      // render OMR preview area
+      const container = document.getElementById('omrContainer');
+      container.innerHTML = `
+        <div class="card p-3">
+          <div class="mb-2 small-muted">Exam: <strong>${escapeHtml(ex.name)}</strong> — Set: <strong>${escapeHtml(ex.set)}</strong></div>
+          <div id="omrArea"></div>
+          <div class="mt-3 d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="clearOMR()">Clear</button>
+            <button type="button" class="btn btn-primary" onclick="calculateAndSave()">Calculate Score</button>
+          </div>
+        </div>`;
+      currentEvaluation = { exam: ex, selectedAnswers: Array(ex.qCount).fill(null) };
+      renderOMRForEvaluation(ex.qCount, ex.answers);
+    }
+
+    function startOMR(){ const id = document.getElementById('evalExamSelect').value; if(!id){ alert('Please select an exam first'); return;} loadExamForEvaluation(); }
+
+    // Render OMR for evaluation — buttons are type=button, dblclick unselect
+    function renderOMRForEvaluation(n, answerKey=[]){
+      const area = document.getElementById('omrArea'); if(!area) return;
+      area.innerHTML = '';
+      const row = document.createElement('div');
+      row.className = 'row g-2';
+      // create a matrix mapping for keyboard navigation (rows x cols)
+      const colsPerGroup = 25;
+      const colCount = Math.ceil(n / colsPerGroup);
+      for(let col=0; col<colCount; col++){
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-md-3';
+        for(let i=col*colsPerGroup+1; i<=Math.min((col+1)*colsPerGroup, n); i++){
+          const q = document.createElement('div');
+          q.className='question-card p-2 mb-2';
+          q.dataset.index = i-1;
+          q.tabIndex = 0; // make focusable
+          q.setAttribute('role','group');
+          q.setAttribute('aria-label', `Question ${i}`);
+          const lbl = document.createElement('div');
+          lbl.className='fw-bold';
+          lbl.textContent = `Q${i}`;
+          q.appendChild(lbl);
+          ['A','B','C','D'].forEach(opt=>{
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-secondary option-btn';
+            btn.textContent = opt;
+            btn.title = `Select ${opt} for Q${i}`;
+            // btn.addEventListener('click', (ev)=>{
+            //   ev.stopPropagation();
+            //   q.querySelectorAll('.option-btn').forEach(x=>x.classList.remove('selected'));
+            //   btn.classList.add('selected');
+            //   if(currentEvaluation) currentEvaluation.selectedAnswers[i-1] = opt;
+            // });
+            btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const idx = parseInt(q.dataset.index, 10);
+
+            if (btn.classList.contains('selected')) {
+              // If already selected → unselect
+              btn.classList.remove('selected');
+              if (currentEvaluation) currentEvaluation.selectedAnswers[idx] = null;
+            } else {
+              // Select this option
+              q.querySelectorAll('.option-btn').forEach(x => x.classList.remove('selected'));
+              btn.classList.add('selected');
+              if (currentEvaluation) currentEvaluation.selectedAnswers[idx] = opt;
+            }
+          });
+
+            // btn.addEventListener('dblclick', (ev)=>{
+            //   ev.stopPropagation();
+            //   if(btn.classList.contains('selected')){
+            //     btn.classList.remove('selected');
+            //     if(currentEvaluation) currentEvaluation.selectedAnswers[i-1] = null;
+            //   }
+            // });
+            q.appendChild(btn);
+          });
+          // keyboard support for each question card
+          q.addEventListener('keydown', (ev)=>{
+            const idx = parseInt(q.dataset.index,10);
+            if(isNaN(idx)) return;
+            // select by letter or number
+            const key = ev.key.toLowerCase();
+            if(['a','b','c','d','1','2','3','4'].includes(key)){
+              ev.preventDefault();
+              let opt = null;
+              if(key === '1' || key === 'a') opt = 'A';
+              if(key === '2' || key === 'b') opt = 'B';
+              if(key === '3' || key === 'c') opt = 'C';
+              if(key === '4' || key === 'd') opt = 'D';
+              if(opt){
+                q.querySelectorAll('.option-btn').forEach(x=>x.classList.remove('selected'));
+                const toSelect = Array.from(q.querySelectorAll('.option-btn')).find(b=>b.textContent===opt);
+                if(toSelect) { toSelect.classList.add('selected'); if(currentEvaluation) currentEvaluation.selectedAnswers[idx] = opt; }
+              }
+            } else if(key === 'delete' || key === '0'){
+              // clear
+              q.querySelectorAll('.option-btn').forEach(x=>x.classList.remove('selected'));
+              if(currentEvaluation) currentEvaluation.selectedAnswers[idx] = null;
+            } else if(key === 'arrowright' || key === 'arrowdown'){
+              ev.preventDefault();
+              // move to next question card in DOM
+              const next = q.nextElementSibling || q.parentElement.nextElementSibling?.querySelector('.question-card');
+              if(next) next.focus();
+            } else if(key === 'arrowleft' || key === 'arrowup'){
+              ev.preventDefault();
+              // move to prev
+              let prev = q.previousElementSibling;
+              if(!prev){
+                // go to previous column's last child if exists
+                const prevCol = q.parentElement.previousElementSibling;
+                if(prevCol) prev = prevCol.querySelector('.question-card:last-of-type');
+              }
+              if(prev) prev.focus();
+            }
+          });
+
+          colDiv.appendChild(q);
+        }
+        row.appendChild(colDiv);
+      }
+      area.appendChild(row);
+      // Pre-fill selections from answerKey if helpful (visual guide only)
+      if(Array.isArray(answerKey)){
+        // optional: show correct indicators? For now do not auto-select student answers.
+      }
+      // attach click-to-focus behavior for mouse users
+      area.querySelectorAll('.question-card').forEach(card=>{
+        card.addEventListener('click', ()=> card.focus());
+      });
+    }
+
+    function clearOMR(){ if(!currentEvaluation) return; currentEvaluation.selectedAnswers.fill(null); document.querySelectorAll('#omrArea .option-btn').forEach(b=>b.classList.remove('selected')); }
+
+    function calculateAndSave(){
+      if(!currentEvaluation) return;
+      const branch = document.getElementById('evalBranch').value.trim();
+      const roll = document.getElementById('evalRoll').value.trim();
+      if(!branch||!roll){ alert('Please enter branch and student roll'); return; }
+      const ex = currentEvaluation.exam;
+      const selected = currentEvaluation.selectedAnswers;
+      const correct = ex.answers || [];
+      let score=0; const wrong=[], blank=[];
+      for(let i=0;i<ex.qCount;i++){
+        const user = selected[i];
+        const corr = correct[i] || null;
+        if(!user){ blank.push(i+1); }
+        else if(user === corr){ score += 1; }
+        else { score -= 0.25; wrong.push(i+1); }
+      }
+      // round to 2 decimals
+      const finalScore = Math.round(score * 100) / 100;
+      const resObj = { id: genId(), examId: ex.id, examName: ex.name, set: ex.set, branch, roll, date: new Date().toISOString(), score: finalScore, wrong, blank, qCount: ex.qCount };
+      const results = getResults(); results.push(resObj); saveResults(results);
+
+      // Show modal directly
+      showResultDetail(resObj);
+
+      // reset evaluation form
+      document.getElementById('evalBranch').value='';
+      document.getElementById('evalRoll').value='';
+      document.getElementById('omrContainer').innerHTML='';
+      if(document.getElementById('resultsTableWrapper')) renderResultsTable();
+    }
+
+    // --- Results UI ---
+    function renderResultsTable(){
+      const wrapper = document.getElementById('resultsTableWrapper'); if(!wrapper) return;
+      const list = getResults();
+      const rRoll = (document.getElementById('rFilterRoll')?.value||'').toLowerCase();
+      const rBranch = (document.getElementById('rFilterBranch')?.value||'').toLowerCase();
+      const sort = document.getElementById('rSort')?.value || 'date_desc';
+      let filtered = list.filter(r=>(!rRoll||r.roll.toLowerCase().includes(rRoll)) && (!rBranch||r.branch.toLowerCase().includes(rBranch)));
+      if(sort==='date_desc') filtered.sort((a,b)=> new Date(b.date)-new Date(a.date));
+      if(sort==='mark_desc') filtered.sort((a,b)=> b.score - a.score);
+      if(sort==='mark_asc') filtered.sort((a,b)=> a.score - b.score);
+      if(sort==='roll_asc') filtered.sort((a,b)=> (a.roll||'').localeCompare(b.roll||''));
+
+      let html = `<div class="table-responsive"><table class="table table-hover align-middle">
+        <thead><tr><th>Date</th><th>Exam</th><th>Branch</th><th>Roll</th><th>Score</th><th>Actions</th></tr></thead><tbody>`;
+      filtered.forEach(r=>{
+        html+=`<tr><td>${new Date(r.date).toLocaleString()}</td><td>${escapeHtml(r.examName)}</td><td>${escapeHtml(r.branch)}</td><td>${escapeHtml(r.roll)}</td><td>${r.score} / ${r.qCount}</td>
+          <td>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick='showResultDetailById("${r.id}")' title="View"><i data-feather="file-text"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick='copyMessage("${r.id}")' title="Copy"><i data-feather="copy"></i></button>
+          </td></tr>`;
+      });
+      html+=`</tbody></table></div>`;
+      wrapper.innerHTML = html; setTimeout(()=>feather.replace(),0);
+    }
+
+    function showResultDetailById(id){ const res = getResults().find(r=>r.id===id); if(res) showResultDetail(res); }
+    // function showResultDetail(res){
+    //   const container = document.getElementById('resultDetailBody'); if(!container) return;
+    //   container.innerHTML = `
+    //     <div class="text-center">
+    //       <h3 class="fw-bold mb-2">${escapeHtml(res.examName)} (Set ${escapeHtml(res.set)})</h3>
+    //       <h4 class="text-primary mb-3">Student: ${escapeHtml(res.roll)} <span class="small-muted">(${escapeHtml(res.branch)})</span></h4>
+    //       <h1 class="display-4 text-success mb-3" style="font-weight: 900; font-size: 3rem;">${res.score} / ${res.qCount}</h1>
+    //       <p class="fs-5"><strong>Wrong (${res.wrong.length}):</strong> ${res.wrong.join(', ') || '-'}</p>
+    //       <p class="fs-5"><strong>Blank (${res.blank.length}):</strong> ${res.blank.join(', ') || '-'}</p>
+    //     </div>
+    //    `;
+    //   const m = new bootstrap.Modal(document.getElementById('resultModal'));
+    //   m.show();
+    // }
+    function showResultDetail(res) {
+    const container = document.getElementById('resultDetailBody');
+    if (!container) return;
+    container.innerHTML = `
+      <div class="text-center">
+        <h3 class="fw-bold mb-2">${escapeHtml(res.examName)} (Set ${escapeHtml(res.set)})</h3>
+        <h4 class="text-primary mb-3">Student's Roll: ${escapeHtml(res.roll)} <span class="small-muted">(${escapeHtml(res.branch)})</span></h4>
+        <h1 class="display-4 mb-3" style="font-weight: 900; font-size: 3rem;">
+          <span style="color: red;">${res.score}</span> / <span style="color: green;">${res.qCount}</span>
+        </h1>
+        <p class="fs-5"><strong>Wrong (${res.wrong.length}):</strong> ${res.wrong.join(', ') || '-'}</p>
+        <p class="fs-5"><strong>Blank (${res.blank.length}):</strong> ${res.blank.join(', ') || '-'}</p>
+      </div>
+    `;
+    const m = new bootstrap.Modal(document.getElementById('resultModal'));
+    m.show();
+  }
+
+    // copy in requested message format
+    function copyMessage(id){
+      const res = getResults().find(r=>r.id===id); if(!res) return;
+      const lines = [];
+      lines.push(`Student Roll : ${res.roll}   (${res.branch})`);
+      lines.push(`Exam: ${res.examName} (Set ${res.set})`);
+      lines.push(`Score: ${res.score} / ${res.qCount}`);
+      lines.push('');
+      lines.push(`Wrong (${res.wrong.length}): ${res.wrong.length ? res.wrong.join(', ') : '-'}`);
+      lines.push('');
+      lines.push(`Blank (${res.blank.length}): ${res.blank.length ? res.blank.join(', ') : '-'}`);
+      const text = lines.join('\n');
+      navigator.clipboard.writeText(text).then(()=>alert('Copied to clipboard')).catch(()=>alert('Failed to copy. You can select and copy manually.'));
+    }
+
+    function exportResultsToExcel(){
+      const rows = getResults().map(r=>({Date:new Date(r.date).toLocaleString(),Exam:r.examName,Set:r.set,Branch:r.branch,Roll:r.roll,Score:r.score + ' / ' + r.qCount,Wrong:r.wrong.join(','),Blank:r.blank.join(',')}));
+      const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Results');
+      const fname = `bb_results_${(new Date()).toISOString().replace(/[:.]/g,'-')}.xlsx`;
+      XLSX.writeFile(wb, fname);
+    }
+
+    // small helper to avoid HTML injection when rendering text
+    function escapeHtml(text){
+      if(text === null || text === undefined) return '';
+      return (''+text).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+    }
+
+    // --- Bootstrapping ---
+    document.getElementById('year').textContent = new Date().getFullYear();
+    initStorage();
+    navigate('home');
+
+    // expose some globals for easy debugging (optional)
+    window.getExams = getExams;
+    window.getResults = getResults;
+    window.saveExams = saveExams;
+  </script>
+</body>
+</html>
